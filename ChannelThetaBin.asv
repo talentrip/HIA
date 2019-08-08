@@ -1,0 +1,90 @@
+function [r,theta,AzBinPixels,AzBinAngles,PixelsPerAzBin] = ChannelThetaBin(MeanImage,center,RFilter,numthetabins)
+
+%% Initialization
+
+if nargin==0
+    clc; close all;
+        fn = 'High Speed Image Analysis\Sample Data Files\SampleMeanImage.mat';
+%     fn = 'C:\Users\Mike\Downloads\Clean-up Data\11-12\O 600-10 1313 hrs_C001H001S0001_small';
+    load(fn)
+    % 调用函数找到圆心半径
+    [a,b,R] = TaubinSVDThresholdFit(MeanImage);
+    center = [a b];
+    numthetabins = 180;
+    % 此函数将视频帧的笛卡尔坐标转换为极坐标
+    r = PixelPolarCoords(MeanImage,[a b]);
+    % 隔离通道
+    RFilter = r>.75*R & r<1.25*R;
+end
+
+%% Calculate theta bins
+
+% Compute polar coordinates for image
+[r theta] = PixelPolarCoords(MeanImage,center);
+
+% Create a vector of angle labels evenly spaced between -180 and +180 deg
+AzBinAngles = linspace(-180,180,numthetabins+1);
+% Preallocate a vector for the number of pixels placed in each bin
+PixelsPerAzBin = zeros(1,numthetabins);
+% Preallocate a struct data type to hold the indices of the pixels in each
+% bin (needs to be a struct so different bins can have different numbers of
+% pixels
+AzBinPixels = struct('indices',{});
+
+% Loop through each bin
+for i = 1:numthetabins
+    
+    % Create a logical matrix identifying pixels in the right radial and
+    % azimuthal range
+    x = (theta>AzBinAngles(i) & theta<AzBinAngles(i+1) & RFilter);
+    
+    % Count how many pixels there are in the bin
+    PixelsPerAzBin(i) = sum(x(:));
+    
+    % And store their indices
+    % 返回[ , , ]三维数组，1 2 1 表示矩阵中第一行第二列的元素满足X>2为真用1来表示
+    AzBinPixels(i).indices = find(x>0);
+    
+    % For demonstration purposes, plot the azimuthal bins
+    if nargin==0 %&& mod(i,2)==0
+        pcolor(MeanImage.*~x)
+        set(gca,'YDir','reverse')
+        colormap('jet');   daspect([1 1 1]);   shading interp;
+        pause(0.25)
+    end
+end
+AzBinAngles(end)=[];      % remove spurious +180 element
+
+
+if nargin==0
+    clear all
+end
+
+%% Check for and eliminate regions of theta where no image was collected
+% This section of code is useful when dealing with partial thruster images,
+% where one would rather not plot angles that weren't captured in the spoke
+% surface
+
+% % Don't show theta bins without many pixels, at least half as many as the
+% % bins with the most pixels
+% thresholdfrac = 0.5;
+% threshold = max(PixelsPerAzBin)*thresholdfrac;
+% % Identify those unpopulated or partially populated bins
+% nodata = PixelsPerAzBin<threshold;
+% 
+% AzBinAngles(nodata) = [];
+% numthetabins = numel(AzBinAngles);
+% AzBinPixels(nodata).indices = [];
+% if nargin==0
+%     plot(PixelsPerAzBin,'.'), hold on
+%     plot(PixelsPerAzBin.*(~nodata),'r.'), hold off
+%     pause
+%     for i = 1:numthetabins
+%         pcolor(MeanImage.*rthetafilter(:,:,i))
+%         colormap('jet');   daspect([1 1 1]);   shading interp;
+%         pause(0.05)
+%     end
+% end
+
+
+
